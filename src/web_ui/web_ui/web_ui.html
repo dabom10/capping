@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>두산 M0609 실시간 모니터링</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: "Pretendard", "Apple SD Gothic Neo", Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #f4f6f5;
+      color: #222;
+    }
+
+    h1 {
+      margin: 0 0 20px 0;
+      font-size: 22px;
+      font-weight: 700;
+      color: #1f3c88;
+      border-bottom: 2px solid #1f3c88;
+      padding-bottom: 8px;
+    }
+
+    .dashboard {
+      display: flex;
+      gap: 20px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 16px 18px;
+      min-width: 260px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+
+    .card h2 {
+      margin: 0 0 12px 0;
+      font-size: 15px;
+      font-weight: 700;
+      color: #2c2c2c;
+    }
+
+    .status-box {
+      display: inline-block;
+      background: #f5b400;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+
+    .info {
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .info span.label {
+      display: inline-block;
+      width: 28px;
+      font-weight: 600;
+    }
+
+    .info span.unit {
+      color: #666;
+      margin-left: 4px;
+    }
+  </style>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <script>
+        // 2. 1단계 4번에서 복사한 firebaseConfig 붙여넣기
+        const firebaseConfig = {
+        apiKey: "AIzaSyBoWy1kWi5lwMnRVs2MeOS96udqWhe-MJU",
+        authDomain: "rokey-1f8f3.firebaseapp.com",
+        databaseURL: "https://rokey-1f8f3-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "rokey-1f8f3",
+        storageBucket: "rokey-1f8f3.firebasestorage.app",
+        messagingSenderId: "405786322615",
+        appId: "1:405786322615:web:b75b9bcd4207a4eda60f32"
+    };
+        // Firebase 앱 초기화
+        firebase.initializeApp(firebaseConfig);
+
+        // 3. Realtime Database 참조 가져오기
+        const database = firebase.database();
+        
+        // 2단계 Python 코드에서 'robot_status/completed_jobs' 경로에 저장했음
+        const jobCountRef = database.ref('robot_status/completed_jobs'); 
+
+        // 4. 데이터 실시간 수신 (핵심!)
+        // 'on' 리스너는 DB 데이터가 변경될 때마다 *자동으로* 호출됩니다.
+        jobCountRef.on('value', (snapshot) => {
+            const jobCount = snapshot.val(); // DB에서 값 가져오기
+            console.log("새 데이터 수신:", jobCount);
+
+            // 5. HTML 요소 업데이트
+            document.getElementById('job-count').innerText = jobCount || 0;
+        });
+    </script>
+</head>
+<body>
+
+  <h1>두산 M0609 실시간 모니터링</h1>
+
+  <div class="dashboard">
+
+    <!-- 로봇 상태 -->
+    <div class="card">
+      <h2>로봇 상태</h2>
+      <div class="status-box">STATE_STANDBY</div>
+      <div class="info">
+        MODE: <b>AUTONOMOUS</b>
+      </div>
+    </div>
+
+    <!-- TCP 좌표 -->
+    <div class="card">
+      <h2>TCP 좌표 (Base 기준)</h2>
+      <div class="info">
+        <span class="label">X:</span> 200.01 <span class="unit">mm</span><br>
+        <span class="label">Y:</span> 250.10 <span class="unit">mm</span><br>
+        <span class="label">Z:</span> 199.95 <span class="unit">mm</span><br><br>
+        <span class="label">A:</span> 130.47 <span class="unit">deg</span><br>
+        <span class="label">B:</span> 179.00 <span class="unit">deg</span><br>
+        <span class="label">C:</span> 130.47 <span class="unit">deg</span>
+      </div>
+    </div>
+
+    <!-- 관절 각도 -->
+    <div class="card">
+      <h2>관절 각도 (Degree)</h2>
+      <div class="info">
+        J1: <br>
+        J2: <br>
+        J3: <br>
+        J4: <br>
+        J5: <br>
+        J6: 
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>작업된 완료 수 :</h2>
+      <div class="info">
+        <span id="job-count">...로딩 중...</span>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

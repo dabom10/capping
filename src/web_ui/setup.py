@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'test_pkg'
+package_name = 'web_ui'
 
 setup(
     name=package_name,
@@ -24,6 +24,9 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'firebase_listener = web_ui.firebase_listener_node:main',
+            'firebase_writer = web_ui.firebase_writer_node:main',
+
         ],
     },
 )
