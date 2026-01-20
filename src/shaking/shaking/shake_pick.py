@@ -1,6 +1,8 @@
 import rclpy
 import DR_init
-
+from std_msgs.msg import String
+from std_msgs.msg import Int32
+import time
 
 # ===============================
 # Global Parameters
@@ -27,6 +29,33 @@ POS_PLACE = [
     [251.1, -386.71, 215.94, 92.46, 162.31, 92.86], # first place
     [399.69, -381.66, 186.38, 91.56, 162.08, 91.85] # second place
 ]
+
+
+# ===============================
+# Global Publisher
+# ===============================
+
+# status_pub = None
+# process_pub = None
+
+# Status pub 데이터 함수
+def publish_status(status: str, status_pub=None):
+    msg = String()
+    msg.data = status
+    status_pub.publish(msg)
+    print(f"[STATUS] {status}")
+
+# Process 진행상황 pub 데이터 함수
+def publish_process(process: Int32, process_pub=None):
+    msg = Int32()
+    msg.data = process
+    process_pub.publish(msg)
+    print(f"[PROCESS] {process}")
+
+def timer_callback(status_pub=None,process_pub=None):
+    publish_status("running", status_pub)
+    publish_process(10, process_pub)
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -64,7 +93,7 @@ def main(args=None):
     # ===============================
     # Pick
     # ===============================
-    def pick(p):
+    def pick(p,status_pub=None,process_pub=None):
         print("[STEP] Pick")
 
         release()
@@ -83,10 +112,12 @@ def main(args=None):
         # 다시 Z 확보
         movel(pick_up, vel=80, acc=80, mod=DR_MV_MOD_REL)
 
+        publish_status("pick_done",status_pub)
+
     # ===============================
     # Shaking
     # ===============================
-    def shaking(cycle=2):
+    def shaking(cycle=2,status_pub=None,process_pub=None):
         print("[STEP] Shaking")
 
         for i in range(cycle):
@@ -113,11 +144,12 @@ def main(args=None):
                 repeat=1,
                 ref=DR_TOOL
             )
+        publish_status("shake_done",status_pub)
 
     # ===============================
     # Place
     # ===============================
-    def place(p):
+    def place(p,status_pub=None,process_pub=None):
         print("[STEP] Place")
 
         place_up = posx(0, 0, SAFE_Z_OFFSET, 0, 0, 0)
@@ -135,18 +167,24 @@ def main(args=None):
 
         # 4. 다시 Z 상승
         movel(place_up, vel=80, acc=80, mod=DR_MV_MOD_REL)
+        publish_status("place_done",status_pub)
 
     try:
         # Tool / TCP
         set_tool("Tool Weight")
         set_tcp("GripperDA_v2")
 
+        # 퍼블리셔 생성
+        status_pub = node.create_publisher(String, "status", 10)
+        process_pub = node.create_publisher(Int32, "process", 10)
+
+
         # ===============================
         # Main Flow
         # ===============================
-        pick(POS_PICK)
-        shaking(cycle=2)
-        place(POS_PLACE[1])
+        pick(POS_PICK,status_pub,process_pub)
+        shaking(cycle=2, status_pub=status_pub, process_pub=process_pub)
+        place(POS_PLACE[1],status_pub,process_pub)
 
         movel(POS_AIR, vel=120, acc=120)
         movej(J_READY, vel=120, acc=120)
