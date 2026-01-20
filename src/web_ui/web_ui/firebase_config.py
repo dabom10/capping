@@ -1,9 +1,9 @@
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
+import os
 
-
-SERVICE_ACCOUNT_KEY_PATH = "/home/dongchanseo/cobot/rokey-1f8f3-firebase-adminsdk-fbsvc-2cb7f18dea.json"
+SERVICE_ACCOUNT_KEY_PATH = os.path.expanduser("~/cobot/rokey-1f8f3-firebase-adminsdk-fbsvc-2cb7f18dea.json")
 DATABASE_URL = "https://rokey-1f8f3-default-rtdb.asia-southeast1.firebasedatabase.app"
 
 _initialized = False
