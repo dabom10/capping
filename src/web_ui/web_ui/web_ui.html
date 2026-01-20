@@ -71,40 +71,345 @@
       color: #666;
       margin-left: 4px;
     }
+
+    .btn {
+      display: inline-block;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      background: #1f3c88;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn:hover {
+      background: #15306d;
+    }
+
+    .btn:disabled {
+      background: #999;
+      cursor: not-allowed;
+    }
+
+    .btn-status {
+      display: block;
+      margin-top: 8px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .input-group input {
+      flex: 1;
+      padding: 8px 12px;
+      font-size: 13px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .input-group .btn {
+      padding: 8px 16px;
+    }
+
+    .current-tool {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1f3c88;
+      margin-bottom: 10px;
+    }
   </style>
 
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
     <script>
-        // 2. 1단계 4번에서 복사한 firebaseConfig 붙여넣기
+        // Firebase 설정
         const firebaseConfig = {
-        apiKey: "AIzaSyBoWy1kWi5lwMnRVs2MeOS96udqWhe-MJU",
-        authDomain: "rokey-1f8f3.firebaseapp.com",
-        databaseURL: "https://rokey-1f8f3-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "rokey-1f8f3",
-        storageBucket: "rokey-1f8f3.firebasestorage.app",
-        messagingSenderId: "405786322615",
-        appId: "1:405786322615:web:b75b9bcd4207a4eda60f32"
-    };
+            apiKey: "AIzaSyBoWy1kWi5lwMnRVs2MeOS96udqWhe-MJU",
+            authDomain: "rokey-1f8f3.firebaseapp.com",
+            databaseURL: "https://rokey-1f8f3-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "rokey-1f8f3",
+            storageBucket: "rokey-1f8f3.firebasestorage.app",
+            messagingSenderId: "405786322615",
+            appId: "1:405786322615:web:b75b9bcd4207a4eda60f32"
+        };
+
         // Firebase 앱 초기화
         firebase.initializeApp(firebaseConfig);
 
-        // 3. Realtime Database 참조 가져오기
+        // Realtime Database 참조
         const database = firebase.database();
-        
-        // 2단계 Python 코드에서 'robot_status/completed_jobs' 경로에 저장했음
-        const jobCountRef = database.ref('robot_status/completed_jobs'); 
 
-        // 4. 데이터 실시간 수신 (핵심!)
-        // 'on' 리스너는 DB 데이터가 변경될 때마다 *자동으로* 호출됩니다.
-        jobCountRef.on('value', (snapshot) => {
-            const jobCount = snapshot.val(); // DB에서 값 가져오기
-            console.log("새 데이터 수신:", jobCount);
+        // 조인트 상태 구독
+        const jointStatesRef = database.ref('robot_status/joint_states/joints');
+        jointStatesRef.on('value', (snapshot) => {
+            const joints = snapshot.val();
+            //console.log("조인트 데이터 수신:", joints);
 
-            // 5. HTML 요소 업데이트
-            document.getElementById('job-count').innerText = jobCount || 0;
+            if (joints) {
+                // 조인트 이름 매핑 (joint_1 ~ joint_6)
+                for (let i = 1; i <= 6; i++) {
+                    const jointName = 'joint_' + i;
+                    const jointElement = document.getElementById('joint_' + i);
+
+                    if (joints[jointName] && jointElement) {
+                        const deg = joints[jointName].position_deg;
+                        jointElement.innerText = deg !== undefined ? deg.toFixed(2) : '-';
+                    }
+                }
+            }
         });
+
+        // Robot State 구독
+        const robotStateRef = database.ref('robot_status/robot_state');
+        robotStateRef.on('value', (snapshot) => {
+            const robotState = snapshot.val();
+            //console.log("Robot State 수신:", robotState);
+
+            if (robotState) {
+                const stateBox = document.getElementById('robot-state-status');
+                if (stateBox) {
+                    stateBox.innerText = robotState.state_name || '-';
+
+                    // 상태에 따른 색상 변경
+                    if (robotState.state_name === 'MOVING') {
+                        stateBox.style.background = '#4CAF50';
+                    } else if (robotState.state_name === 'STANDBY') {
+                        stateBox.style.background = '#f5b400';
+                    } else if (robotState.state_name === 'EMERGENCY_STOP' || robotState.state_name === 'SAFE_STOP') {
+                        stateBox.style.background = '#f44336';
+                    } else {
+                        stateBox.style.background = '#2196F3';
+                    }
+                }
+            }
+        });
+
+        // TCP 위치 구독
+        const tcpRef = database.ref('robot_status/tcp');
+        tcpRef.on('value', (snapshot) => {
+            const tcp = snapshot.val();
+            //console.log("TCP 데이터 수신:", tcp);
+
+            if (tcp) {
+                const fields = ['x', 'y', 'z', 'rx', 'ry', 'rz'];
+                fields.forEach(field => {
+                    const element = document.getElementById('tcp_' + field);
+                    if (element && tcp[field] !== undefined) {
+                        element.innerText = tcp[field].toFixed(2);
+                    }
+                });
+            }
+        });
+
+        // Move Circle 명령 참조
+        const moveCircleRef = database.ref('robot_command/move_circle');
+
+        // Move Circle 상태 구독
+        moveCircleRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            const statusEl = document.getElementById('move-circle-status');
+            if (data && data.status && statusEl) {
+                statusEl.innerText = '상태: ' + data.status;
+                if (data.status === 'success') {
+                    statusEl.style.color = '#4CAF50';
+                } else if (data.status === 'failed' || data.status.startsWith('error')) {
+                    statusEl.style.color = '#f44336';
+                } else {
+                    statusEl.style.color = '#666';
+                }
+            }
+        });
+
+        // Move Circle 실행 함수
+        function executeMoveCircle() {
+            const btn = document.getElementById('btn-move-circle');
+            const statusEl = document.getElementById('move-circle-status');
+
+            btn.disabled = true;
+            statusEl.innerText = '상태: 실행 중...';
+            statusEl.style.color = '#2196F3';
+
+            // Firebase에 명령 전송
+            moveCircleRef.update({
+                execute: true,
+                status: 'pending',
+                // 기본 원형 이동 파라미터 (필요시 수정)
+                pos1: [400.0, 100.0, 300.0, 0.0, 180.0, 0.0],
+                pos2: [400.0, -100.0, 300.0, 0.0, 180.0, 0.0],
+                vel: 100.0,
+                acc: 100.0
+            }).then(() => {
+                console.log('Move Circle 명령 전송 완료');
+                setTimeout(() => { btn.disabled = false; }, 1000);
+            }).catch((error) => {
+                console.error('Move Circle 명령 전송 실패:', error);
+                statusEl.innerText = '상태: 전송 실패';
+                statusEl.style.color = '#f44336';
+                btn.disabled = false;
+            });
+        }
+
+        // Move Line 명령 참조
+        const moveLineRef = database.ref('robot_command/move_line');
+
+        // Move Line 상태 구독
+        moveLineRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            const statusEl = document.getElementById('move-line-status');
+            if (data && data.status && statusEl) {
+                statusEl.innerText = '상태: ' + data.status;
+                if (data.status === 'success') {
+                    statusEl.style.color = '#4CAF50';
+                } else if (data.status === 'failed' || data.status.startsWith('error')) {
+                    statusEl.style.color = '#f44336';
+                } else {
+                    statusEl.style.color = '#666';
+                }
+            }
+        });
+
+        // Move Line 실행 함수
+        function executeMoveLine() {
+            const btn = document.getElementById('btn-move-line');
+            const statusEl = document.getElementById('move-line-status');
+
+            btn.disabled = true;
+            statusEl.innerText = '상태: 실행 중...';
+            statusEl.style.color = '#2196F3';
+
+            // Firebase에 명령 전송
+            moveLineRef.update({
+                execute: true,
+                status: 'pending',
+                // 기본 직선 이동 파라미터 (필요시 수정)
+                pos: [400.0, 0.0, 300.0, 0.0, 180.0, 0.0],
+                vel: 100.0,
+                acc: 100.0
+            }).then(() => {
+                console.log('Move Line 명령 전송 완료');
+                setTimeout(() => { btn.disabled = false; }, 1000);
+            }).catch((error) => {
+                console.error('Move Line 명령 전송 실패:', error);
+                statusEl.innerText = '상태: 전송 실패';
+                statusEl.style.color = '#f44336';
+                btn.disabled = false;
+            });
+        }
+
+        // Current Tool 상태 구독
+        const currentToolRef = database.ref('robot_status/current_tool');
+        currentToolRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            const toolNameEl = document.getElementById('current-tool-name');
+            if (data && toolNameEl) {
+                toolNameEl.innerText = data.name || '-';
+            }
+        });
+
+        // Set Tool 명령 참조
+        const setToolRef = database.ref('robot_command/set_tool');
+
+        // Set Tool 상태 구독
+        setToolRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            const statusEl = document.getElementById('set-tool-status');
+            if (data && data.status && statusEl) {
+                statusEl.innerText = '상태: ' + data.status;
+                if (data.status === 'success') {
+                    statusEl.style.color = '#4CAF50';
+                } else if (data.status === 'failed' || data.status.startsWith('error')) {
+                    statusEl.style.color = '#f44336';
+                } else {
+                    statusEl.style.color = '#666';
+                }
+            }
+        });
+
+        // Set Tool 실행 함수
+        function executeSetTool() {
+            const btn = document.getElementById('btn-set-tool');
+            const statusEl = document.getElementById('set-tool-status');
+            const inputEl = document.getElementById('input-tool-name');
+            const toolName = inputEl.value.trim();
+
+            if (!toolName) {
+                statusEl.innerText = '상태: Tool 이름을 입력하세요';
+                statusEl.style.color = '#f44336';
+                return;
+            }
+
+            btn.disabled = true;
+            statusEl.innerText = '상태: 설정 중...';
+            statusEl.style.color = '#2196F3';
+
+            // Firebase에 명령 전송
+            setToolRef.update({
+                execute: true,
+                status: 'pending',
+                name: toolName
+            }).then(() => {
+                console.log('Set Tool 명령 전송 완료');
+                setTimeout(() => { btn.disabled = false; }, 1000);
+            }).catch((error) => {
+                console.error('Set Tool 명령 전송 실패:', error);
+                statusEl.innerText = '상태: 전송 실패';
+                statusEl.style.color = '#f44336';
+                btn.disabled = false;
+            });
+        }
+
+        // Move Home 명령 참조
+        const moveHomeRef = database.ref('robot_command/move_home');
+
+        // Move Home 상태 구독
+        moveHomeRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            const statusEl = document.getElementById('move-home-status');
+            if (data && data.status && statusEl) {
+                statusEl.innerText = '상태: ' + data.status;
+                if (data.status === 'success') {
+                    statusEl.style.color = '#4CAF50';
+                } else if (data.status === 'failed' || data.status.startsWith('error')) {
+                    statusEl.style.color = '#f44336';
+                } else {
+                    statusEl.style.color = '#666';
+                }
+            }
+        });
+
+        // Move Home 실행 함수
+        function executeMoveHome(target) {
+            const btn = document.getElementById('btn-move-home-' + target);
+            const statusEl = document.getElementById('move-home-status');
+
+            btn.disabled = true;
+            statusEl.innerText = '상태: 실행 중...';
+            statusEl.style.color = '#2196F3';
+
+            // Firebase에 명령 전송
+            moveHomeRef.update({
+                execute: true,
+                status: 'pending',
+                target: target  // 0: Mechanical home, 1: User home
+            }).then(() => {
+                console.log('Move Home 명령 전송 완료');
+                setTimeout(() => { btn.disabled = false; }, 1000);
+            }).catch((error) => {
+                console.error('Move Home 명령 전송 실패:', error);
+                statusEl.innerText = '상태: 전송 실패';
+                statusEl.style.color = '#f44336';
+                btn.disabled = false;
+            });
+        }
     </script>
 </head>
 <body>
@@ -112,47 +417,63 @@
   <h1>두산 M0609 실시간 모니터링</h1>
 
   <div class="dashboard">
-
     <!-- 로봇 상태 -->
     <div class="card">
       <h2>로봇 상태</h2>
-      <div class="status-box">STATE_STANDBY</div>
-      <div class="info">
-        MODE: <b>AUTONOMOUS</b>
-      </div>
+      <div id="robot-state-status" class="status-box">-</div>
     </div>
-
-    <!-- TCP 좌표 -->
-    <div class="card">
-      <h2>TCP 좌표 (Base 기준)</h2>
-      <div class="info">
-        <span class="label">X:</span> 200.01 <span class="unit">mm</span><br>
-        <span class="label">Y:</span> 250.10 <span class="unit">mm</span><br>
-        <span class="label">Z:</span> 199.95 <span class="unit">mm</span><br><br>
-        <span class="label">A:</span> 130.47 <span class="unit">deg</span><br>
-        <span class="label">B:</span> 179.00 <span class="unit">deg</span><br>
-        <span class="label">C:</span> 130.47 <span class="unit">deg</span>
-      </div>
-    </div>
-
+    
     <!-- 관절 각도 -->
     <div class="card">
       <h2>관절 각도 (Degree)</h2>
       <div class="info">
-        J1: <br>
-        J2: <br>
-        J3: <br>
-        J4: <br>
-        J5: <br>
-        J6: 
+        <span class="label">J1:</span> <span id="joint_1">-</span><span class="unit">°</span><br>
+        <span class="label">J2:</span> <span id="joint_2">-</span><span class="unit">°</span><br>
+        <span class="label">J3:</span> <span id="joint_3">-</span><span class="unit">°</span><br>
+        <span class="label">J4:</span> <span id="joint_4">-</span><span class="unit">°</span><br>
+        <span class="label">J5:</span> <span id="joint_5">-</span><span class="unit">°</span><br>
+        <span class="label">J6:</span> <span id="joint_6">-</span><span class="unit">°</span>
       </div>
     </div>
 
+    <!-- TCP 위치 -->
     <div class="card">
-      <h2>작업된 완료 수 :</h2>
+      <h2>TCP 위치</h2>
       <div class="info">
-        <span id="job-count">...로딩 중...</span>
+        <span class="label">X:</span> <span id="tcp_x">-</span><span class="unit">mm</span><br>
+        <span class="label">Y:</span> <span id="tcp_y">-</span><span class="unit">mm</span><br>
+        <span class="label">Z:</span> <span id="tcp_z">-</span><span class="unit">mm</span><br>
+        <span class="label">RX:</span> <span id="tcp_rx">-</span><span class="unit">°</span><br>
+        <span class="label">RY:</span> <span id="tcp_ry">-</span><span class="unit">°</span><br>
+        <span class="label">RZ:</span> <span id="tcp_rz">-</span><span class="unit">°</span>
       </div>
+    </div>
+
+    <!-- Tool 설정 -->
+    <div class="card">
+      <h2>TCP Tool</h2>
+      <div class="info">
+        <span style="font-weight: 600;">현재 Tool:</span> <span id="current-tool-name" class="current-tool">-</span>
+      </div>
+      <div class="input-group">
+        <input type="text" id="input-tool-name" placeholder="Tool 이름 입력">
+        <button id="btn-set-tool" class="btn" onclick="executeSetTool()">설정</button>
+      </div>
+      <span id="set-tool-status" class="btn-status">상태: 대기</span>
+    </div>
+
+    <!-- 로봇 제어 -->
+    <div class="card">
+      <h2>로봇 제어</h2>
+      <!-- <button id="btn-move-home-0" class="btn" onclick="executeMoveHome(0)">Move Home (기계)</button> -->
+      <button id="btn-move-home-1" class="btn" onclick="executeMoveHome(1)">Move Home (사용자)</button>
+      <span id="move-home-status" class="btn-status">상태: 대기</span>
+      <br><br>
+      <button id="btn-move-circle" class="btn" onclick="executeMoveCircle()">Move Circle</button>
+      <span id="move-circle-status" class="btn-status">상태: 대기</span>
+      <br><br>
+      <button id="btn-move-line" class="btn" onclick="executeMoveLine()">Move Line</button>
+      <span id="move-line-status" class="btn-status">상태: 대기</span>
     </div>
 
   </div>
