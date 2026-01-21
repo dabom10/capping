@@ -58,10 +58,11 @@ POS_PLACE = [
     [266.1, -386.71, 200.94, 92.46, 162.31, 92.86],
     [379.69, -381.66, 186.38, 91.56, 162.08, 91.85]
 ]
-POS_AIR = [261.31, -343.97, 390.04, 114.58, -179.02, 115.44]
+POS_AIR = [300.31, -343.97, 390.04, 114.58, -179.02, 115.44] # x: 261.31 -> 300.31로 변경
 J_READY = [0, 0, 90, 0, 90, 0]
 J_MIX_1 = [0, 10, 80,  45,  45,  90]
 J_MIX_2 = [0, 10, 80, -45, -45, -90]
+POS_HOME_BEFORE = [317.34, -307.11, 344.5, 125.41, -170.49, 127.82] # 마지막 동작에서 movel -> movej로 디버깅해서 괜찮을 수도 있음
 
 # 캡핑 회전 상수
 J6_START, J6_END = -180.0, 180.0
@@ -222,20 +223,24 @@ class IntegratedSystem:
 
     def shaking_process(self, idx, base_progress):
         """쉐이킹 공정 세부 로직"""
-        from DSR_ROBOT2 import movel, movej, move_periodic, DR_BASE, DR_TOOL, posx, DR_MV_MOD_REL, wait
+        from DSR_ROBOT2 import movel, movej, move_periodic, get_current_posj, DR_BASE, DR_TOOL, posx, DR_MV_MOD_REL, wait
 
         self.log(f"cycle_{idx+1}_shaking_start", base_progress + 30)
         
         # 1. Pick (캡핑된 병 위치)
-        pick_pos = POS_PICK[idx]
-        movej(J_READY, vel=VELJ, acc=ACCJ)
-        movel(posx(pick_pos), vel=VELX, acc=ACCX)
-        self.grip()
-        movel(posx([0,0,SAFE_Z_OFFSET,0,0,0]), vel=VELX, acc=ACCX, mod=DR_MV_MOD_REL)
+        # pick_pos = POS_PICK[idx] # 캡핑하고 바로 시작하는거라 필요없음
+        # movej(J_READY, vel=VELJ, acc=ACCJ) # 지움
+        # movel(posx(pick_pos), vel=VELX, acc=ACCX)
+        # self.grip()
+        # movel(posx([0,0,SAFE_Z_OFFSET,0,0,0]), vel=VELX, acc=ACCX, mod=DR_MV_MOD_REL) # 어차피 shaking 할때 홈 위치로 가서 이 부분 없어도 괜찮음
+        # j6 초기화 
+        curr_j = get_current_posj()
+        curr_j[5] = 0
+        movej(curr_j, vel=VELJ, acc=ACCJ)
 
         # 2. Shaking
         for _ in range(2):
-            movej(J_READY, vel=VEL_SHAKE, acc=ACC_SHAKE)
+            movej(J_READY, vel=60, acc=ACC_SHAKE) # 갑자기 슉 가는 부분(해결함)
             movej(J_MIX_1, vel=VEL_SHAKE, acc=ACC_SHAKE)
             movej(J_MIX_2, vel=VEL_SHAKE, acc=ACC_SHAKE)
             movej(J_READY, vel=VEL_SHAKE, acc=ACC_SHAKE)
@@ -258,11 +263,12 @@ class IntegratedSystem:
         for i in range(2):
             base_p = i * 50
             self.capping_process(i, base_p)
-            # self.shaking_process(i, base_p)
+            self.shaking_process(i, base_p)
         
         from DSR_ROBOT2 import movej
         movej(POS_AIR, vel=VELJ, acc=ACCJ)
-        movel(J_READY, vel=VELJ, acc=ACCJ)
+        movel(POS_HOME_BEFORE, vel=VELX, acc=ACCX) # 빼고도 구조물에 안걸리는지 확인 필요함->걸려.....^^
+        movej(J_READY, vel=VELJ, acc=ACCJ)
         self.log("all_process_completed", 100)
 
 def main(args=None):
