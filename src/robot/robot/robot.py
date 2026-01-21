@@ -15,7 +15,7 @@ ROBOT_TOOL = "Tool Weight"
 ROBOT_TCP = "GripperDA_v2"
 
 # 속도 설정
-VELX = [60, 60]
+VELX = [80, 80] # [60, 60]
 ACCX = [100, 100]
 VELX_FAST = [100, 100]
 ACCX_FAST = [120, 120]
@@ -35,20 +35,20 @@ SAFE_Z_OFFSET = 100
 # ========================================
 # [캡핑 관련]
 BOTTLE_POSITIONS = [
-    [436.33, 247.01, 58.5, 29.08, 177.43, 29.02],   # BOTTLE_POS_1
-    [208.26, 245.89, 55.62, 168.87, 179.6, 167.49]  # BOTTLE_POS_3
+    [436.33, 247.01, 58.5, 29.08, 180, 29.02],   # BOTTLE_POS_1
+    [208.26, 245.89, 55.62, 168.87, 180, 167.49]  # BOTTLE_POS_3
 ]
 BOTTLE_TARGETS = [
-    [325.7, 11.10, 105.41, 19.83, -179.47, 19.28],   # TARGET 1
-    [325.7, 7.10, 105.53, 19.83, -179.47, 19.28]     # TARGET 3
+    [325.7, 11.10, 105.41, 19.83, 180, 19.28],   # TARGET 1
+    [325.7, 7.10, 105.53, 19.83, 180, 19.28]     # TARGET 3
 ]
 BOTTLE_TARGETS_GOS = [
-    [319.7, 6.10, 119.41, 19.83, -179.47, 19.28],
-    [319.7, 6.10, 99.53, 19.83, -179.47, 19.28]
+    [319.7, 6.10, 119.41, 19.83, 180, 19.28],
+    [318.7, 5.10, 99.53, 19.83, 180, 19.28] # [319.7, 6.10, 99.53, 19.83, 180, 19.28] 
 ]
 CAP_POSITIONS = [
-    [569.72, 238.92, 82.52, 130.85, -177.92, 130.39], # CAP 2
-    [569.72, 238.92, 59.52, 130.85, -177.92, 130.39]  # CAP 3
+    [569.72, 238.92, 82.52, 130.85, 180, 130.39], # CAP 2
+    [569.72, 238.92, 59.52, 130.85, 180, 130.39]  # CAP 3
 ]
 
 # [쉐이킹 관련]
@@ -67,7 +67,7 @@ J_MIX_2 = [0, 10, 80, -45, -45, -90]
 POS_HOME_BEFORE = [317.34, -307.11, 344.5, 125.41, -170.49, 127.82] # 마지막 동작에서 movel -> movej로 디버깅해서 괜찮을 수도 있음
 
 # 캡핑 회전 상수
-J6_START, J6_END = -180.0, 180.0
+J6_START, J6_END = -270.0, 90.0
 TOTAL_DOWN = 5.0
 
 class IntegratedSystem:
@@ -112,7 +112,7 @@ class IntegratedSystem:
         """캡핑 공정 세부 로직"""
         from DSR_ROBOT2 import (posx, movel, movej, wait, DR_MV_MOD_REL, get_current_posj, 
                                  task_compliance_ctrl, set_stiffnessx, set_desired_force, 
-                                 check_force_condition, DR_AXIS_Z, DR_AXIS_C, release_force, 
+                                 check_force_condition, DR_AXIS_Z, DR_AXIS_C, release_force, get_tool_force,
                                  release_compliance_ctrl, DR_FC_MOD_REL, posj,get_current_posx)
 
         self.log(f"cycle_{idx+1}_capping_start", base_progress + 5)
@@ -225,54 +225,78 @@ class IntegratedSystem:
 
             if not obj_ok: # 검출 됐다면
                 
-                    release_force(time=0.0) # 아래로 더이상 내려가지 않게 force 끔  
-                    print('힘제어 설정 off')    
-                    movel(posx([0,0,70,0,0,0]), vel=60, acc=60, mod=DR_MV_MOD_REL)  # 위로 위치 조정
-                    release_compliance_ctrl()       
+                release_force(time=0.0) # 아래로 더이상 내려가지 않게 force 끔  
+                print('힘제어 설정 off')    
+                movel(posx([0,0,70,0,0,0]), vel=60, acc=60, mod=DR_MV_MOD_REL)  # 위로 위치 조정
+                release_compliance_ctrl()       
 
         # 회전 조이기
         print('회전 조이기 시작')
         self.release()
+
+        # [수정] 회전 조이기 전 J6를 -180도로 초기화
+        # 두 번째 병에서도 충분한 회전 범위(-180 ~ 180)를 확보하기 위함
+        # 이전에는 첫 번째 병 후 J6가 180 근처여서 두 번째 병에서 조금만 돌고 멈추는 문제 발생
+        curr_j = get_current_posj()
+        curr_j[5] = J6_START  # J6_START = -180.0
+        movej(curr_j, vel=VELJ, acc=ACCJ)
+        print(f"[DEBUG] J6 초기화 완료: {J6_START}도")
+
         down = posx([0, 0, -94, 0, 0, 0])
         movel(down, vel=VELX, acc=ACCX, mod=DR_MV_MOD_REL)
-        print(f"누른 후 다운 : {get_current_posx()}")        
+        print(f"누른 후 다운 : {get_current_posx()}")
         start_j = get_current_posj()
-        start_j6 = start_j[5]       
+        start_j6 = start_j[5]  # 이제 항상 -180에서 시작       
         print('while 시작')
         self.grip()
+
+        # [슬립 감지] Mx 기반 슬립 감지 변수
+        # Mx > 0.6 이면 슬립 상태로 판단 (그리퍼만 헛돌고 캡이 안 돌아감)
+        # 3회 연속 감지 시 종료하여 오탐 방지
+        slip_count = 0
+        SLIP_THRESHOLD = 2      # 연속 감지 횟수
+        MX_SLIP_VALUE = 0.3     # 슬립 판단 임계값 (Nm)
+        spin_count = 0 
+
         while True:
+            current_force = get_tool_force()
+            mx = current_force[3]  # Mx 토크 값
+            spin_count += 1
+            # [디버깅] 힘(N)과 토크(Nm) 6개 값 모두 출력
+            print(f"[Force] Fx={current_force[0]:.2f}, Fy={current_force[1]:.2f}, Fz={current_force[2]:.2f} (N)")
+            print(f"[Torque] Mx={mx:.2f}, My={current_force[4]:.2f}, Mz={current_force[5]:.2f} (Nm)")
+
+            # [슬립 감지] Mx가 임계값 초과 시 슬립 카운트 증가
+            if mx > MX_SLIP_VALUE:
+                slip_count += 1
+                print(f"[슬립 감지] Mx={mx:.2f} > {MX_SLIP_VALUE} ({slip_count}/{SLIP_THRESHOLD})")
+                if slip_count >= SLIP_THRESHOLD and spin_count > 5:  # 연속 감지 및 최소 회전 후 종료
+                    print('뚜껑 조이기 완료 (슬립 감지)')
+                    break
+            else:
+                slip_count = 0  # 조건 불만족 시 리셋
+
             print('while 진입')
-            # count += 1
             current_j = get_current_posj()
-            target_j6 = start_j6 + 360/20 
-            start_j6 = target_j6 
-            if target_j6 > 180:
-                target_j6 = 180
-            elif target_j6 < -180:
-                target_j6 = -180
-            
+            target_j6 = start_j6 + 360/20
+            start_j6 = target_j6
+            if target_j6 > 90:      # J6_END
+                target_j6 = 90
+            elif target_j6 < -270:  # J6_START
+                target_j6 = -270
+
             target_j = posj([
                 current_j[0], current_j[1], current_j[2],
                 current_j[3], current_j[4], target_j6
             ])
-            # target_j = posj([
-            #     current_j[0], current_j[1], current_j[2],
-            #     current_j[3], current_j[4], J6_END + 60
-            # ])
+
             movej(target_j, vel=50, acc=80)
             movel(posx([0,0,-(TOTAL_DOWN/20),0,0,0]), vel=[10,30], acc=[30,50], mod=DR_MV_MOD_REL)
-            if not check_force_condition(DR_AXIS_C, min=20, max=70):
-                print('뚜껑 조이기 완료')
-                break            # if not check_force_condition(DR_AXIS_C, min=20, max=70):
-            
-            elif start_j6 >= 180: # 안전장치
+
+            # 안전장치: 회전 제한 도달 시 종료
+            if start_j6 >= 90:
                 print('뚜껑 조이기 회전 제한 도달')
-                break
-            # elif count >= 20: # 안전장치
-            #     print('뚜껑 조이기 시도 횟수 제한 도달')
-            #     break
-            else:
-                continue              
+                break              
             
         # self.release()
         # movel(posx([0,0,100,0,0,0]), vel=VELX, acc=ACCX, mod=DR_MV_MOD_REL)
@@ -324,12 +348,12 @@ class IntegratedSystem:
         for i in range(2):
             base_p = i * 50
             self.capping_process(i, base_p)
-            self.shaking_process(i, base_p)
+            # self.shaking_process(i, base_p)
         
         from DSR_ROBOT2 import movej
-        movej(POS_AIR, vel=VELJ, acc=ACCJ)
-        movel(POS_HOME_BEFORE, vel=VELX, acc=ACCX) # 빼고도 구조물에 안걸리는지 확인 필요함->걸려.....^^
-        movej(J_READY, vel=VELJ, acc=ACCJ)
+        # movej(POS_AIR, vel=VELJ, acc=ACCJ)
+        # movel(POS_HOME_BEFORE, vel=VELX, acc=ACCX) # 빼고도 구조물에 안걸리는지 확인 필요함->걸려.....^^
+        # movej(J_READY, vel=VELJ, acc=ACCJ)
         self.log("all_process_completed", 100)
 
 def main(args=None):
@@ -338,8 +362,13 @@ def main(args=None):
     DR_init.__dsr__node = node
     DR_init.__dsr__id = ROBOT_ID
     DR_init.__dsr__model = ROBOT_MODEL
+    from DSR_ROBOT2 import release_force, get_tcp, release_compliance_ctrl
+    print(f"엔드이펙터 - Gripper : {get_tcp()}")
 
     system = IntegratedSystem(node)
+    
+    release_force(time=0.0)
+    release_compliance_ctrl()
 
     try:
         time.sleep(1.0)
