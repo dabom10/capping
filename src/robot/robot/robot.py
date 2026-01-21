@@ -23,12 +23,34 @@ VELX_SLOW = [30, 30]
 ACCX_SLOW = [60, 60]
 VELJ = 60
 ACCJ = 60
-VEL_SHAKE = 400
-ACC_SHAKE = 400
+VEL_SHAKE = 100
+ACC_SHAKE = 100
+MOVE_DIST = 40 # 위아래 이동 거리
+SNAP_J5 = 20
+SNAP_J6 = 15
 
 # 그리퍼 및 핀
 ON, OFF = 1, 0
 SAFE_Z_OFFSET = 100
+
+
+# [쉐이킹 for문 내 변수 모음]
+# 쉐이킹 반복 횟수
+ITERATION = 5
+# 각 관절별 흔들림 진폭
+AMP_J3 = 10 
+AMP_J4 = 15
+AMP_J5 = 35
+AMP_J6 = 20
+# 로봇 관절 한계치 (입력해주신 값 기준, 안전 여유 2도 제외)
+joint_limits = [
+            (-360 + 2, 360 - 2), # J1
+            (-95 + 2, 95 - 2),   # J2
+            (-135 + 2, 135 - 2), # J3
+            (-360 + 2, 360 - 2), # J4
+            (-135 + 2, 135 - 2), # J5
+            (-360 + 2, 360 - 2)  # J6
+        ]
 
 # ========================================
 # 좌표 데이터 (제공된 리스트 활용)
@@ -304,7 +326,7 @@ class IntegratedSystem:
 
     def shaking_process(self, idx, base_progress):
         """쉐이킹 공정 세부 로직"""
-        from DSR_ROBOT2 import movel, movej, move_periodic, get_current_posj, DR_BASE, DR_TOOL, posx, DR_MV_MOD_REL, wait
+        from DSR_ROBOT2 import movel, movej, get_current_posj, DR_BASE, DR_TOOL, posx, DR_MV_MOD_REL, wait
 
         self.log(f"쉐이킹 공정을 시작합니다.. (사이클 : {idx+1} 회)", base_progress + 30)
         
@@ -320,19 +342,50 @@ class IntegratedSystem:
 
         # j6 초기화 
         curr_j = get_current_posj()
-        curr_j[5] = 0
-        movej(curr_j, vel=VELJ, acc=ACCJ)
+        print(curr_j)
+        curr_j[5] = -180.0
+        movej(curr_j, vel=VELJ, acc=ACCJ) # 캡핑하면서 돌아간 줄 풀기
+        print('돌아간 줄 뽑기 끝')
 
         # 2. Shaking
-        for _ in range(2):
-            movej(J_READY, vel=60, acc=ACC_SHAKE) # 갑자기 슉 가는 부분(해결함)
-            movej(J_MIX_1, vel=VEL_SHAKE, acc=ACC_SHAKE)
-            movej(J_MIX_2, vel=VEL_SHAKE, acc=ACC_SHAKE)
-            movej(J_READY, vel=VEL_SHAKE, acc=ACC_SHAKE)
-            move_periodic(amp=[0,0,40,0,0,120], period=0.4, repeat=1, ref=DR_BASE)
-            move_periodic(amp=[0,0,0,40,40,0], period=0.35, repeat=1, ref=DR_TOOL)
+        def get_safe_joint(base_j, offsets):
+            """현재 각도에 오프셋을 더한 뒤 한계치 넘지 않도록 보정"""
+            safe_target = []
+            for i in range(6):
+                target_val = base_j[i] + offsets[i]
+                min_limit, max_limit = joint_limits[i]
+                if target_val < min_limit: target_val = min_limit
+                if target_val > max_limit: target_val = max_limit
+                safe_target.append(target_val)
+            return safe_target
+        
+        # movel(posx([0,0,100,0,0,0]), vel=100, acc=100, mod=DR_MV_MOD_REL)
+        start_j = get_current_posj()
+        
+        for i in range(ITERATION):
+            print(f"{i+1}번째 쉐이킹 동작 실행 중...")
 
+            # 1) 위로 이동 오프셋
+            offsets_up = [0, 0, -AMP_J3, -AMP_J4, -AMP_J5, -AMP_J6]
+            target_up = get_safe_joint(start_j, offsets_up)
+
+            # 2) 아래로 이동 오프셋
+            offsets_down = [0, 0, AMP_J3, AMP_J4, AMP_J5, AMP_J6]
+            target_down = get_safe_joint(start_j, offsets_down)
+
+            # 마지막 루프 여부에 따른 블렌딩 반경 설정
+            is_last = (i == ITERATION - 1)
+            r_val = 0 if is_last else 15
+
+            # [주의] mod=DR_MV_MOD_REL를 제거했습니다 (이미 절대 좌표 계산됨)
+            # [주의] r=r_val 대신 radius=r_val를 사용했습니다
+            movej(target_up, vel=VEL_SHAKE, acc=ACC_SHAKE, radius=r_val)
+            movej(target_down, vel=VEL_SHAKE, acc=ACC_SHAKE, radius=r_val)
+
+        print("쉐이킹 동작 완료")
+        
         # 3. Place
+        print('place 시작')
         place_pos = POS_PLACE[idx]
         movel(POS_AIR, vel=VELX, acc=ACCX)
         movel(posx(place_pos), vel=VELX, acc=ACCX)
@@ -348,7 +401,7 @@ class IntegratedSystem:
         for i in range(2):
             base_p = i * 50
             self.capping_process(i, base_p)
-            # self.shaking_process(i, base_p)
+            self.shaking_process(i, base_p)
         
         from DSR_ROBOT2 import movej
         movej(POS_AIR, vel=VELJ, acc=ACCJ)
