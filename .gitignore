@@ -2,7 +2,7 @@
 build/
 install/
 log/
-
+log/latest/_build/
 # CMake
 **/CMakeFiles/
 **/*.o

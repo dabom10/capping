@@ -165,24 +165,9 @@ class IntegratedSystem:
         movel(little_down, vel=60, acc=60, mod=DR_MV_MOD_REL)  # 아래로 약간 하강
         print('힘제어 시작')
         set_desired_force([0, 0, -55, 0, 0, 0], [0, 0, 5, 0, 0, 0], mod=DR_FC_MOD_REL)
+        while not check_force_condition(DR_AXIS_Z, min=50, max=100): pass
+        release_force(); release_compliance_ctrl()
         
-        while True:
-            obj_ok = check_force_condition(DR_AXIS_Z, min=50, max=100) 
-            if not obj_ok:  # 힘 감지 (뚜껑 눌림)
-                    # tp_log("뚜껑 누르기 완료")
-                    print(obj_ok)
-                    print('뚜껑 누르기 감지')
-                    break
-            continue
-
-        if not obj_ok: # 검출 됐다면
-                release_force(time=0.0) # 아래로 더이상 내려가지 않게 force 끔
-
-                print('힘제어 설정 off')
-
-                movel(posx([0,0,70,0,0,0]), vel=60, acc=60, mod=DR_MV_MOD_REL)  # 위로 위치 조정
-                release_compliance_ctrl() 
-
         # 회전 조이기
 
         # for _ in range(20):
