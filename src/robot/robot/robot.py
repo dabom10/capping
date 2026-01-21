@@ -23,8 +23,8 @@ VELX_SLOW = [30, 30]
 ACCX_SLOW = [60, 60]
 VELJ = 60
 ACCJ = 60
-VEL_SHAKE = 100
-ACC_SHAKE = 100
+VEL_SHAKE = 60
+ACC_SHAKE = 60
 MOVE_DIST = 40 # 위아래 이동 거리
 SNAP_J5 = 20
 SNAP_J6 = 15
@@ -40,7 +40,7 @@ ITERATION = 5
 # 각 관절별 흔들림 진폭
 AMP_J3 = 10 
 AMP_J4 = 15
-AMP_J5 = 35
+AMP_J5 = 20
 AMP_J6 = 20
 # 로봇 관절 한계치 (입력해주신 값 기준, 안전 여유 2도 제외)
 joint_limits = [
@@ -87,6 +87,8 @@ J_READY = [0, 0, 90, 0, 90, 0]
 J_MIX_1 = [0, 10, 80,  45,  45,  90]
 J_MIX_2 = [0, 10, 80, -45, -45, -90]
 POS_HOME_BEFORE = [317.34, -307.11, 344.5, 125.41, -170.49, 127.82] # 마지막 동작에서 movel -> movej로 디버깅해서 괜찮을 수도 있음
+J_SHAKE_START=[2.98, 17, 63.38, -24.65, 52.10, -1.4]
+
 
 # 캡핑 회전 상수
 J6_START, J6_END = -270.0, 90.0
@@ -135,7 +137,7 @@ class IntegratedSystem:
         from DSR_ROBOT2 import (posx, movel, movej, wait, DR_MV_MOD_REL, get_current_posj, 
                                  task_compliance_ctrl, set_stiffnessx, set_desired_force, 
                                  check_force_condition, DR_AXIS_Z, DR_AXIS_C, release_force, get_tool_force,
-                                 release_compliance_ctrl, DR_FC_MOD_REL, posj,get_current_posx)
+                                 release_compliance_ctrl, DR_FC_MOD_REL, posj,get_current_posx, is_done_bolt_tightening)
 
         self.log(f"캡핑 공정을 시작합니다.. (사이클 : {idx+1} 회)", base_progress + 5)
         
@@ -277,7 +279,7 @@ class IntegratedSystem:
         # 3회 연속 감지 시 종료하여 오탐 방지
         slip_count = 0
         SLIP_THRESHOLD = 2      # 연속 감지 횟수
-        MX_SLIP_VALUE = 0.3     # 슬립 판단 임계값 (Nm)
+        MX_SLIP_VALUE = 0.7     # 슬립 판단 임계값 (Nm)
         spin_count = 0 
 
         while True:
@@ -294,6 +296,9 @@ class IntegratedSystem:
                 print(f"[슬립 감지] Mx={mx:.2f} > {MX_SLIP_VALUE} ({slip_count}/{SLIP_THRESHOLD})")
                 if slip_count >= SLIP_THRESHOLD and spin_count > 5:  # 연속 감지 및 최소 회전 후 종료
                     print('뚜껑 조이기 완료 (슬립 감지)')
+                    break
+                elif is_done_bolt_tightening():  # 추가 조건: 볼트 조임 완료 감지 함수
+                    print('뚜껑 조이기 완료 (볼트 조임 완료 감지)')
                     break
             else:
                 slip_count = 0  # 조건 불만족 시 리셋
@@ -361,11 +366,16 @@ class IntegratedSystem:
         
         # movel(posx([0,0,100,0,0,0]), vel=100, acc=100, mod=DR_MV_MOD_REL)
         start_j = get_current_posj()
+
+    
+        # movel(posx([505.31, 43.97, 340.04, 114.58, -179.02, 115.44]), vel=VEL_SHAKE, acc=ACC_SHAKE)  # 쉐이킹 시작 위치로 이동 -> 필요없음
+        movej(J_SHAKE_START, vel=VELJ, acc=ACCJ)
+        print("쉐이킹 시작 위치 도달")
         
         for i in range(ITERATION):
             print(f"{i+1}번째 쉐이킹 동작 실행 중...")
 
-            # 1) 위로 이동 오프셋
+            # 1) 위로 이동 오프셋 o
             offsets_up = [0, 0, -AMP_J3, -AMP_J4, -AMP_J5, -AMP_J6]
             target_up = get_safe_joint(start_j, offsets_up)
 
@@ -414,8 +424,14 @@ def main(args=None):
     node = rclpy.create_node("integrated_automation_node", namespace=ROBOT_ID)
     DR_init.__dsr__node = node
     DR_init.__dsr__id = ROBOT_ID
-    DR_init.__dsr__model = ROBOT_MODEL
+    DR_init.__dsr__model = ROBOT_MODEL #[305.31, -343.97, 390.04, 114.58, -179.02, 115.44]
     from DSR_ROBOT2 import release_force, get_tcp, release_compliance_ctrl
+
+    if get_tcp() != ROBOT_TCP:
+        print(f"엔드이펙터 - Gripper 오류 : {get_tcp()}")
+        # node.destroy_node()
+        rclpy.shutdown()
+
     print(f"엔드이펙터 - Gripper : {get_tcp()}")
 
     system = IntegratedSystem(node)
