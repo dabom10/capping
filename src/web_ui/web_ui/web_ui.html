@@ -417,7 +417,7 @@
             const data = snapshot.val();
             const statusEl = document.getElementById('dsr-status-value');
             if (data && statusEl) {
-                statusEl.innerText = data.value || '-';
+                statusEl.innerText = data.value || 'system-ready';
             }
         });
 
@@ -427,7 +427,7 @@
             const data = snapshot.val();
             const processEl = document.getElementById('dsr-process-value');
             if (data && processEl) {
-                processEl.innerText = data.value !== undefined ? data.value : '-';
+                processEl.innerText = data.value !== undefined ? data.value : '0';
             }
         });
     </script>
@@ -442,8 +442,8 @@
       <h2>로봇 상태</h2>
       <div id="robot-state-status" class="status-box">-</div>
       <div class="info" style="margin-top: 10px;">
-        <span style="font-weight: 600;">Status:</span> <span id="dsr-status-value">-</span><br>
-        <span style="font-weight: 600;">Process:</span> <span id="dsr-process-value">-</span>
+        <span style="font-weight: 600;">Status:</span> <span id="dsr-status-value">system-ready</span><br>
+        <span style="font-weight: 600;">Process:</span> <span id="dsr-process-value">0</span>
       </div>
     </div>
     
