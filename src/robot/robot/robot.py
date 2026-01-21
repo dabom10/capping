@@ -351,17 +351,10 @@ class IntegratedSystem:
             # self.shaking_process(i, base_p)
         
         from DSR_ROBOT2 import movej
-<<<<<<< HEAD
         movej(POS_AIR, vel=VELJ, acc=ACCJ)
         movel(POS_HOME_BEFORE, vel=VELX, acc=ACCX) # 빼고도 구조물에 안걸리는지 확인 필요함->걸려.....^^
         movej(J_READY, vel=VELJ, acc=ACCJ)
         self.log("all_process_completed", 100)
-=======
-        movej(POS_AIR, vel=VELJ, acc=ACCJ)
-        movel(POS_HOME_BEFORE, vel=VELX, acc=ACCX) # 빼고도 구조물에 안걸리는지 확인 필요함->걸려.....^^
-        movej(J_READY, vel=VELJ, acc=ACCJ)
-        self.log("모든 프로세스가 완료되었습니다.", 100)
->>>>>>> ce27af2cc7aa0e0f646106cfc79e03f3ce1aef37
 
 def main(args=None):
     rclpy.init(args=args)
