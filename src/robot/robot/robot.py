@@ -110,7 +110,7 @@ class IntegratedSystem:
         from DSR_ROBOT2 import (posx, movel, movej, wait, DR_MV_MOD_REL, get_current_posj, 
                                  task_compliance_ctrl, set_stiffnessx, set_desired_force, 
                                  check_force_condition, DR_AXIS_Z, DR_AXIS_C, release_force, 
-                                 release_compliance_ctrl, DR_FC_MOD_REL, posj)
+                                 release_compliance_ctrl, DR_FC_MOD_REL, posj,get_current_posx)
 
         self.log(f"cycle_{idx+1}_capping_start", base_progress + 5)
         
@@ -123,7 +123,12 @@ class IntegratedSystem:
         movel(posx(bottle_pos), vel=VELX_SLOW, acc=ACCX_SLOW)
         self.grip()
         movel(posx([0,0,100,0,0,0]), vel=VELX, acc=ACCX, mod=DR_MV_MOD_REL)
-        movel(posx(target_pos), vel=VELX, acc=ACCX)
+        # movel(posx(target_pos), vel=VELX, acc=ACCX)
+        movel(posx([target_pos[0], target_pos[1], target_pos[2] + 70,
+                                   target_pos[3], target_pos[4], target_pos[5]]), vel=VELX, acc=ACCX)
+        
+        movel(posx([target_pos[0], target_pos[1], target_pos[2] - 20,
+                                   target_pos[3], target_pos[4], target_pos[5]]), vel=VELX, acc=ACCX)
         self.release()
         movel(posx([0,0,100,0,0,0]), vel=VELX, acc=ACCX, mod=DR_MV_MOD_REL)
 
@@ -145,25 +150,86 @@ class IntegratedSystem:
         movel(posx([target_go[0], target_go[1], target_go[2]-(idx*10), target_go[3], target_go[4], target_go[5]]), vel=[20,20], acc=ACCX_SLOW)
 
         # 힘 제어 누르기
+        print("뚜껑 누르기")
         self.release(); wait(0.3)
         movel(posx([0,0,100,0,0,0]), vel=VELX, acc=ACCX, mod=DR_MV_MOD_REL)
         self.grip()
+
+
         task_compliance_ctrl()
         set_stiffnessx([100, 100, 50, 100, 100, 100])
-        set_desired_force([0, 0, -55, 0, 0, 0], [0, 0, 5, 0, 0, 0], mod=DR_FC_MOD_REL)
-        while not check_force_condition(DR_AXIS_Z, min=50, max=100): pass
-        release_force(); release_compliance_ctrl()
+        print("순응 제어 설정 완료")    
         
+        down_grip_control = len(BOTTLE_TARGETS_GOS)
+        little_down = posx([0,0,down_grip_control*15-80,0,0,0])
+        movel(little_down, vel=60, acc=60, mod=DR_MV_MOD_REL)  # 아래로 약간 하강
+        print('힘제어 시작')
+        set_desired_force([0, 0, -55, 0, 0, 0], [0, 0, 5, 0, 0, 0], mod=DR_FC_MOD_REL)
+        
+        while True:
+            obj_ok = check_force_condition(DR_AXIS_Z, min=50, max=100) 
+            if not obj_ok:  # 힘 감지 (뚜껑 눌림)
+                    # tp_log("뚜껑 누르기 완료")
+                    print(obj_ok)
+                    print('뚜껑 누르기 감지')
+                    break
+            continue
+
+        if not obj_ok: # 검출 됐다면
+                release_force(time=0.0) # 아래로 더이상 내려가지 않게 force 끔
+
+                print('힘제어 설정 off')
+
+                movel(posx([0,0,70,0,0,0]), vel=60, acc=60, mod=DR_MV_MOD_REL)  # 위로 위치 조정
+                release_compliance_ctrl() 
+
         # 회전 조이기
+
+        # for _ in range(20):
+        #     target_j6 = start_j6 + (360/20)
+        #     start_j6 = target_j6
+        #     if target_j6 > 190: break
+        #     movej(posj([start_j[0], start_j[1], start_j[2], start_j[3], start_j[4], target_j6]), vel=50, acc=80)
+        #     movel(posx([0,0,-(TOTAL_DOWN/20),0,0,0]), vel=[10,30], acc=[30,50], mod=DR_MV_MOD_REL)
+        #     if not check_force_condition(DR_AXIS_C, min=20, max=70): break
+        # count = 0
+        self.release()
+        down = posx([0, 0, -94, 0, 0, 0])
+        movel(down, vel=VELX, acc=ACCX, mod=DR_MV_MOD_REL)
+        print(f"누른 후 다운 : {get_current_posx()}")        
         start_j = get_current_posj()
-        start_j6 = start_j[5]
-        for _ in range(20):
+        start_j6 = start_j[5]       
+        print('while 시작')
+        self.grip()
+        while True:
+            print('while 진입')
+            # count += 1
+            current_j = get_current_posj()
             target_j6 = start_j6 + (700/20)
             start_j6 = target_j6
-            if target_j6 > 330: break
-            movej(posj([start_j[0], start_j[1], start_j[2], start_j[3], start_j[4], target_j6]), vel=50, acc=80)
+            if target_j6 > 180:
+                target_j6 = 180
+            elif target_j6 < -180:
+                target_j6 = -180
+            
+            target_j = posj([
+                current_j[0], current_j[1], current_j[2],
+                current_j[3], current_j[4], target_j6
+            ])
+            movej(target_j, vel=50, acc=80)
             movel(posx([0,0,-(TOTAL_DOWN/20),0,0,0]), vel=[10,30], acc=[30,50], mod=DR_MV_MOD_REL)
-            if not check_force_condition(DR_AXIS_C, min=20, max=70): break
+            if not check_force_condition(DR_AXIS_C, min=20, max=70):
+                print('뚜껑 조이기 완료')
+                break            # if not check_force_condition(DR_AXIS_C, min=20, max=70):
+            
+            elif start_j6 >= 180: # 안전장치
+                print('뚜껑 조이기 회전 제한 도달')
+                break
+            # elif count >= 20: # 안전장치
+            #     print('뚜껑 조이기 시도 횟수 제한 도달')
+            #     break
+            else:
+                continue              
             
         self.release()
         movel(posx([0,0,100,0,0,0]), vel=VELX, acc=ACCX, mod=DR_MV_MOD_REL)
@@ -207,7 +273,7 @@ class IntegratedSystem:
         for i in range(2):
             base_p = i * 50
             self.capping_process(i, base_p)
-            self.shaking_process(i, base_p)
+            # self.shaking_process(i, base_p)
         
         from DSR_ROBOT2 import movej
         movej(POS_AIR, vel=VELJ, acc=ACCJ)
