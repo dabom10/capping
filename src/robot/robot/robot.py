@@ -56,6 +56,7 @@ joint_limits = [
 # 좌표 데이터 (제공된 리스트 활용)
 # ========================================
 # [캡핑 관련]
+BOTTLE_POS_2 = [347.21, -96.46, 50.73, 19.45, 179.44, 20.02]
 BOTTLE_POSITIONS = [
     [436.33, 247.01, 58.5, 29.08, 180, 29.02],   # BOTTLE_POS_1
     [208.26, 245.89, 55.62, 168.87, 180, 167.49]  # BOTTLE_POS_3
@@ -146,12 +147,17 @@ class IntegratedSystem:
                                  release_compliance_ctrl, DR_FC_MOD_REL, posj,get_current_posx, is_done_bolt_tightening)
 
         self.log(f"캡핑 공정을 시작합니다.. (사이클 : {idx+1} 회)", base_progress + 5)
-        
         # 1. 병 이동
         self.release()
         bottle_pos = BOTTLE_POSITIONS[idx]
         target_pos = BOTTLE_TARGETS[idx]
-        
+        if idx == 1:
+            try:    
+                movel(posx(BOTTLE_POS_2), vel=VELX_FAST, acc=ACCX_FAST)
+            except:
+                self.move_home()
+            wait(2)  # 두 번째 병 대기 시간
+
         movel(posx([bottle_pos[0], bottle_pos[1], bottle_pos[2]+70, bottle_pos[3], bottle_pos[4], bottle_pos[5]]), vel=VELX_FAST, acc=ACCX_FAST)
         movel(posx(bottle_pos), vel=VELX_SLOW, acc=ACCX_SLOW)
         self.grip()
