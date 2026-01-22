@@ -15,10 +15,10 @@ ROBOT_TOOL = "Tool Weight"
 ROBOT_TCP = "GripperDA_v2"
 
 # 속도 설정
-VELX = [80, 80] # [60, 60]
-ACCX = [100, 100]
-VELX_FAST = [100, 100]
-ACCX_FAST = [120, 120]
+VELX = [150, 150] # [60, 60]
+ACCX = [150, 150]
+VELX_FAST = [180, 180]
+ACCX_FAST = [180, 180]
 VELX_SLOW = [30, 30]
 ACCX_SLOW = [60, 60]
 VELJ = 60
@@ -83,7 +83,7 @@ POS_PLACE = [
     [266.1, -386.71, 200.94, 92.46, 162.31, 92.86],
     [392.69, -381.66, 186.38, 91.56, 162.08, 91.85]
 ]
-POS_AIR = [305.31, -43.97, 480.04, 114.58, -179.02, 115.44] # x: 261.31 -> 300.31로 변경
+POS_AIR = [328, -215, 456, 176, -176, 151] # x: 261.31 -> 300.31로 변경
 J_READY = [0, 0, 90, 0, 90, 0]
 J_MIX_1 = [0, 10, 80,  45,  45,  90]
 J_MIX_2 = [0, 10, 80, -45, -45, -90]
@@ -275,7 +275,7 @@ class IntegratedSystem:
 
         down = posx([0, 0, -94, 0, 0, 0])
         movel(down, vel=VELX, acc=ACCX, mod=DR_MV_MOD_REL)
-        print(f"누른 후 다운 : {get_current_posx()}")
+        # print(f"누른 후 다운 : {get_current_posx()}")
         start_j = get_current_posj()
         start_j6 = start_j[5]  # 이제 항상 -180에서 시작       
         print('while 시작')
@@ -428,7 +428,7 @@ class IntegratedSystem:
         self.initialize()
         for i in range(2):
             base_p = i * 50
-            # self.capping_process(i, base_p)
+            self.capping_process(i, base_p)
             self.shaking_process(i, base_p)
         
         from DSR_ROBOT2 import movej
