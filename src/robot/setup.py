@@ -32,6 +32,8 @@ setup(
             'capping_robot = robot.capping_robot:main',
             'shaking_robot = robot.shaking_robot:main',
             'recover = robot.recover:main',
+            'recovery = robot.recovery:main',
+            'reboot_a = robot.reboot_a:main',
         ],
     },
 )
