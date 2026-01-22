@@ -6,8 +6,9 @@
 - shaking_robot 노드로부터 완료 신호 수신 후 다음 사이클 진행
 - 총 2사이클 실행: 캡핑1 → 쉐이킹1 → 캡핑2 → 쉐이킹2 → 완료
 """
-
+ 
 import time
+import threading
 import rclpy
 from rclpy.node import Node
 import DR_init
@@ -22,10 +23,10 @@ ROBOT_TOOL = "Tool Weight"
 ROBOT_TCP = "GripperDA_v2"
 
 # 속도 설정
-VELX = [80, 80]
-ACCX = [100, 100]
-VELX_FAST = [100, 100]
-ACCX_FAST = [120, 120]
+VELX = [150, 150]
+ACCX = [150, 150]
+VELX_FAST = [180, 180]
+ACCX_FAST = [180, 180]
 VELX_SLOW = [30, 30]
 ACCX_SLOW = [60, 60]
 VELJ = 60
@@ -48,7 +49,7 @@ BOTTLE_TARGETS = [
 ]
 BOTTLE_TARGETS_GOS = [
     [319.7, 6.10, 119.41, 19.83, 180, 19.28],
-    [318.7, 5.10, 99.53, 19.83, 180, 19.28]
+    [321.7, 5.10, 99.53, 19.83, 180, 19.28] # 318.7 + 3
 ]
 CAP_POSITIONS = [
     [569.72, 238.92, 82.52, 130.85, 180, 130.39],
@@ -56,7 +57,7 @@ CAP_POSITIONS = [
 ]
 
 J_READY = [0, 0, 90, 0, 90, 0]
-POS_AIR = [305.31, -343.97, 390.04, 114.58, -179.02, 115.44]
+POS_AIR = [328, -215, 456, 176, -176, 151]
 POS_HOME_BEFORE = [317.34, -307.11, 344.5, 125.41, -170.49, 127.82]
 
 # 캡핑 회전 상수
@@ -82,6 +83,7 @@ class CappingRobotNode(Node):
         self.current_cycle = 0
         self.total_cycles = 2
         self.waiting_for_shaking = False
+        self.trigger_next_cycle = False
         self.all_done = False
 
         self.get_logger().info("캡핑 로봇 노드 초기화 완료")
@@ -129,14 +131,8 @@ class CappingRobotNode(Node):
 
         if self.waiting_for_shaking and cycle == self.current_cycle:
             self.waiting_for_shaking = False
-            self.current_cycle += 1
-
-            if self.current_cycle < self.total_cycles:
-                # 다음 캡핑 사이클 실행
-                self.run_capping_cycle()
-            else:
-                # 모든 사이클 완료
-                self.finish_all()
+            self.trigger_next_cycle = True
+            self.get_logger().info("다음 사이클 트리거 활성화")
 
     def capping_process(self, idx):
         """캡핑 공정 세부 로직"""
@@ -185,8 +181,8 @@ class CappingRobotNode(Node):
 
         # 힘 제어 누르기
         for i in range(2):
-            force_list = [-60, -50]
-            f_list = [65, 60]   # [55, 50]
+            force_list = [-70, -60]
+            f_list = [50, 50]
             self.get_logger().info(f"뚜껑 누르기 : {i}")
             if i == 1:
                 rot = posj(0,0,0,0,0,90)
@@ -209,7 +205,7 @@ class CappingRobotNode(Node):
             set_desired_force([0, 0, force_list[i], 0, 0, 0], [0, 0, 5, 0, 0, 0], mod=DR_FC_MOD_REL)
 
             while True:
-                obj_ok = check_force_condition(DR_AXIS_Z, min=f_list[i], max=120)
+                obj_ok = check_force_condition(DR_AXIS_Z, min=f_list[i], max=150)
                 if not obj_ok:
                     self.get_logger().info("뚜껑 누르기 감지")
                     break
@@ -218,8 +214,8 @@ class CappingRobotNode(Node):
             if not obj_ok:
                 release_force(time=0.0)
                 self.get_logger().info("힘제어 설정 off")
-                movel(posx([0,0,70,0,0,0]), vel=60, acc=60, mod=DR_MV_MOD_REL)
                 release_compliance_ctrl()
+                movel(posx([0,0,70,0,0,0]), vel=60, acc=60, mod=DR_MV_MOD_REL)
 
         # 회전 조이기
         self.get_logger().info("회전 조이기 시작")
@@ -255,7 +251,7 @@ class CappingRobotNode(Node):
             if is_done_bolt_tightening(m=0.7, timeout=5, axis=DR_AXIS_Z):
                 slip_count += 1
                 self.get_logger().info(f"[볼트체결 감지] ({slip_count}/{SLIP_THRESHOLD})")
-                if slip_count >= SLIP_THRESHOLD and spin_count > 10:
+                if slip_count >= SLIP_THRESHOLD and spin_count > 12:
                     self.get_logger().info("뚜껑 조이기 완료 (볼트체결 감지)")
                     break
             else:
@@ -313,12 +309,28 @@ class CappingRobotNode(Node):
 
     def run(self):
         """메인 실행 함수"""
+        # 로봇 동작을 별도 스레드에서 실행
+        self.robot_thread = threading.Thread(target=self.robot_loop)
+        self.robot_thread.daemon = True
+        self.robot_thread.start()
+        
+        self.get_logger().info("캡핑 노드 스피닝 시작")
+        rclpy.spin(self)
+
+    def robot_loop(self):
+        """로봇 동작 제어 루프 (별도 스레드)"""
         self.initialize()
         self.run_capping_cycle()
 
-        # 이벤트 루프 - 쉐이킹 완료 신호 대기
         while rclpy.ok() and not self.all_done:
-            rclpy.spin_once(self, timeout_sec=0.1)
+            if self.trigger_next_cycle:
+                self.trigger_next_cycle = False
+                self.current_cycle += 1
+                if self.current_cycle < self.total_cycles:
+                    self.run_capping_cycle()
+                else:
+                    self.finish_all()
+            time.sleep(0.1)
 
 
 def main(args=None):
