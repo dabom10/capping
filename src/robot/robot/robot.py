@@ -23,8 +23,8 @@ VELX_SLOW = [30, 30]
 ACCX_SLOW = [60, 60]
 VELJ = 60
 ACCJ = 60
-VEL_SHAKE = 300
-ACC_SHAKE = 350
+VEL_SHAKE = 150
+ACC_SHAKE = 150
 MOVE_DIST = 40 # 위아래 이동 거리
 SNAP_J5 = 20
 SNAP_J6 = 15
@@ -40,8 +40,10 @@ ITERATION = 5
 # 각 관절별 흔들림 진폭
 AMP_J3 = 10 
 AMP_J4 = 15
-AMP_J5 = 20
+AMP_J5 = 20 
 AMP_J6 = 20
+TILT_ANGLE = 45 # 기울기 각도
+
 # 로봇 관절 한계치 (입력해주신 값 기준, 안전 여유 2도 제외)
 joint_limits = [
             (-360 + 2, 360 - 2), # J1
@@ -67,7 +69,7 @@ BOTTLE_TARGETS = [
 ]
 BOTTLE_TARGETS_GOS = [
     [319.7, 6.10, 119.41, 19.83, 180, 19.28],
-    [318.7, 5.10, 99.53, 19.83, 180, 19.28] # [319.7, 6.10, 99.53, 19.83, 180, 19.28] 
+    [318.7+3, 5.10, 99.53, 19.83, 180, 19.28] # [319.7, 6.10, 99.53, 19.83, 180, 19.28] 
 ]
 CAP_POSITIONS = [
     [569.72, 238.92, 82.52, 130.85, 180, 130.39], # CAP 2
@@ -80,12 +82,12 @@ POS_PICK = [
     [321.10, 8.29, 80.98, 178.85, 179.24, 178.52]
 ]
 POS_PLACE = [
-    [266.1, -386.71, 200.94, 92.46, 162.31, 92.86],
-    [392.69, -381.66, 186.38, 91.56, 162.08, 91.85]
+    [266.1, -386.71, 210.94, 92.46, 162.31, 92.86], # z 10 up
+    [392.69, -381.66, 196.38, 91.56, 162.08, 91.85] # z 10 up
 ]
 POS_AIR = [328, -215, 456, 176, -176, 151] # x: 261.31 -> 300.31로 변경
 J_READY = [0, 0, 90, 0, 90, 0]
-J_MIX_1 = [0, 10, 80,  45,  45,  90]
+J_MIX_1 = [0, 10, 80,  45,  45, 90]
 J_MIX_2 = [0, 10, 80, -45, -45, -90]
 POS_HOME_BEFORE = [317.34, -307.11, 344.5, 125.41, -170.49, 127.82] # 마지막 동작에서 movel -> movej로 디버깅해서 괜찮을 수도 있음
 J_SHAKE_START=[2.98, 17, 63.38, -24.65, 52.10, -180.0]
@@ -151,12 +153,12 @@ class IntegratedSystem:
         self.release()
         bottle_pos = BOTTLE_POSITIONS[idx]
         target_pos = BOTTLE_TARGETS[idx]
-        if idx == 1:
-            try:    
-                movel(posx(BOTTLE_POS_2), vel=VELX_FAST, acc=ACCX_FAST)
-            except:
-                self.move_home()
-            wait(2)  # 두 번째 병 대기 시간
+        # if idx == 1:
+        #     try:    
+        #         movel(posx(BOTTLE_POS_2), vel=VELX_FAST, acc=ACCX_FAST)
+        #     except:
+        #         self.move_home()
+        #     wait(2)  # 두 번째 병 대기 시간
 
         movel(posx([bottle_pos[0], bottle_pos[1], bottle_pos[2]+70, bottle_pos[3], bottle_pos[4], bottle_pos[5]]), vel=VELX_FAST, acc=ACCX_FAST)
         movel(posx(bottle_pos), vel=VELX_SLOW, acc=ACCX_SLOW)
@@ -257,9 +259,10 @@ class IntegratedSystem:
 
             if not obj_ok: # 검출 됐다면
                 release_force(time=0.0) # 아래로 더이상 내려가지 않게 force 끔  
-                print('힘제어 설정 off')    
+                print('힘제어 설정 off')   
+                release_compliance_ctrl() 
                 movel(posx([0,0,70,0,0,0]), vel=60, acc=60, mod=DR_MV_MOD_REL)  # 위로 위치 조정
-                release_compliance_ctrl()       
+                # release_compliance_ctrl()       
 
         # 회전 조이기
         print('회전 조이기 시작')
@@ -347,7 +350,7 @@ class IntegratedSystem:
 
     def shaking_process(self, idx, base_progress):
         """쉐이킹 공정 세부 로직"""
-        from DSR_ROBOT2 import movel, movej, get_current_posj, DR_BASE, DR_TOOL, posx, DR_MV_MOD_REL, wait
+        from DSR_ROBOT2 import movel, movej, get_current_posj, DR_BASE, DR_TOOL, posx, DR_MV_MOD_REL, wait, move_periodic
 
         self.log(f"쉐이킹 공정을 시작합니다.. (사이클 : {idx+1} 회)", base_progress + 30)
         
@@ -361,55 +364,71 @@ class IntegratedSystem:
         wait(6)
         movel(posx([0,0,100,0,0,0]), vel=VELX, acc=ACCX, mod=DR_MV_MOD_REL)
 
-        # # j6 초기화 
-        # curr_j = get_current_posj()
-        # print(curr_j)
-        # curr_j[5] = -180.0
-        # movej(curr_j, vel=VELJ, acc=ACCJ) # 캡핑하면서 돌아간 줄 풀기
-        # print('돌아간 줄 뽑기 끝')
+        # j6 초기화 
+        curr_j = get_current_posj()
+        print(curr_j)
+        curr_j[5] = -180.0
+        movej(curr_j, vel=VELJ, acc=ACCJ) # 캡핑하면서 돌아간 줄 풀기
+        print('돌아간 줄 뽑기 끝')
 
         # 2. Shaking
-        def get_safe_joint(base_j, offsets):
-            """현재 각도에 오프셋을 더한 뒤 한계치 넘지 않도록 보정"""
-            safe_target = []
-            for i in range(6):
-                target_val = base_j[i] + offsets[i]
-                min_limit, max_limit = joint_limits[i]
-                if target_val < min_limit: target_val = min_limit
-                if target_val > max_limit: target_val = max_limit
-                safe_target.append(target_val)
-            return safe_target
+
+        J_SHAKE = [0, 0, 90, 0, 0, -180]
+        J_SHAKE_2 = [0, 0, 90, 0, 0, -180]
+
+        for _ in range(4):
+            movej(J_SHAKE, vel=VEL_SHAKE, acc=ACC_SHAKE)
+            movej(J_SHAKE_2, vel=VEL_SHAKE, acc=ACC_SHAKE)
+        # # def get_safe_joint(base_j, offsets):
+        # for _ in range(2):
+        #     # movej(J_READY, vel=60, acc=ACC_SHAKE) # 갑자기 슉 가는 부분(해결함)
+        #     movej(J_MIX_1, vel=VEL_SHAKE, acc=ACC_SHAKE)
+        #     movej(J_MIX_2, vel=VEL_SHAKE, acc=ACC_SHAKE)
+        #     movej(J_READY, vel=VEL_SHAKE, acc=ACC_SHAKE)
+        #     move_periodic(amp=[0,0,40,0,0,120], period=0.4, repeat=1, ref=DR_BASE)
+        #     move_periodic(amp=[0,0,0,40,40,0], period=0.35, repeat=1, ref=DR_TOOL)
+        #     """현재 각도에 오프셋을 더한 뒤 한계치 넘지 않도록 보정"""
+        #     safe_target = []
+        #     for i in range(6):
+        #         target_val = base_j[i] + offsets[i]
+        #         min_limit, max_limit = joint_limits[i]
+        #         if target_val < min_limit: target_val = min_limit
+        #         if target_val > max_limit: target_val = max_limit
+        #         safe_target.append(target_val)
+        #     return safe_target
         
 
-        # movel(posx([505.31, 43.97, 340.04, 114.58, -179.02, 115.44]), vel=VEL_SHAKE, acc=ACC_SHAKE)  # 쉐이킹 시작 위치로 이동 -> 필요없음
-        movej(J_SHAKE_START, vel=VELJ, acc=ACCJ)
-        print("쉐이킹 시작 위치 도달")
-        # movel(posx([0,0,100,0,0,0]), vel=100, acc=100, mod=DR_MV_MOD_REL)
-        start_j = get_current_posj()    
+        # # movel(posx([505.31, 43.97, 340.04, 114.58, -179.02, 115.44]), vel=VEL_SHAKE, acc=ACC_SHAKE)  # 쉐이킹 시작 위치로 이동 -> 필요없음
+        # movej(J_SHAKE_START, vel=VELJ, acc=ACCJ)
+        # print("쉐이킹 시작 위치 도달")
+        # # movel(posx([0,0,100,0,0,0]), vel=100, acc=100, mod=DR_MV_MOD_REL)
+        # start_j_normal = get_current_posj()    
         
-        for i in range(ITERATION):
-            print(f"{i+1}번째 쉐이킹 동작 실행 중...")
+        # for i in range(ITERATION):
+        #     print(f"기본 쉐이킹 동작 시작...")
 
-            # 1) 위로 이동 오프셋 o
-            offsets_up = [0, 0, -AMP_J3, -AMP_J4, -AMP_J5, -AMP_J6]
-            target_up = get_safe_joint(start_j, offsets_up)
+        #     # shake 1) 위로 이동 오프셋 
+        #     offsets_up = [0, 0, -AMP_J3, -AMP_J4, -AMP_J5, -AMP_J6]
+        #     target_up = get_safe_joint(start_j_normal, offsets_up)
+        #     # shake 2) 아래로 이동 오프셋
+        #     offsets_down = [0, 0, AMP_J3, AMP_J4, AMP_J5, AMP_J6]
+        #     target_down = get_safe_joint(start_j_normal, offsets_down)
 
-            # 2) 아래로 이동 오프셋
-            offsets_down = [0, 0, AMP_J3, AMP_J4, AMP_J5, AMP_J6]
-            target_down = get_safe_joint(start_j, offsets_down)
+        #     movej(target_up, vel=VEL_SHAKE, acc=ACC_SHAKE, radius=5)
+        #     movej(target_down, vel=VEL_SHAKE, acc=ACC_SHAKE, radius=5)
 
-            # # 마지막 루프 여부에 따른 블렌딩 반경 설정
-            # is_last = (i == ITERATION - 1)
-            # r_val = 0 if is_last else 15
-
-            # [주의] mod=DR_MV_MOD_REL를 제거했습니다 (이미 절대 좌표 계산됨)
-            # # [주의] r=r_val 대신 radius=r_val를 사용했습니다
-            # movej(target_up, vel=VEL_SHAKE, acc=ACC_SHAKE, radius=r_val)
-            # movej(target_down, vel=VEL_SHAKE, acc=ACC_SHAKE, radius=r_val)
-
-            movej(target_up, vel=VEL_SHAKE, acc=ACC_SHAKE, radius=5)
-            movej(target_down, vel=VEL_SHAKE, acc=ACC_SHAKE, radius=5)
-
+        # ## --- [모션 2: 가로(좌우 비틀기) 쉐이킹] ---
+        # # J4를 90도 돌리지 않고, 현재 상태에서 J4와 J6만 교차로 흔듭니다.
+        # print("2. 좌우 비틀기(가로) 쉐이킹 시작")
+        
+        # for i in range(ITERATION):
+        #     # J3(팔꿈치), J5(스냅)는 고정(0)하고 J4와 J6만 반대 방향으로 흔듦
+        #     # 이렇게 하면 병이 제자리에서 좌우로 빠르게 회전하며 가로 쉐이킹 효과를 냅니다.
+        #     target_left = get_safe_joint(start_j_normal, [0, 0, 0, -30, 0, 30])
+        #     target_right = get_safe_joint(start_j_normal, [0, 0, 0, 30, 0, -30])
+            
+        #     movej(target_left, vel=VEL_SHAKE + 50, acc=ACC_SHAKE + 200, radius=5)
+        #     movej(target_right, vel=VEL_SHAKE + 50, acc=ACC_SHAKE + 200, radius=5)
         print("쉐이킹 동작 완료")
         
         # 3. Place
@@ -428,7 +447,7 @@ class IntegratedSystem:
         self.initialize()
         for i in range(2):
             base_p = i * 50
-            self.capping_process(i, base_p)
+            # self.capping_process(i, base_p)
             self.shaking_process(i, base_p)
         
         from DSR_ROBOT2 import movej
@@ -446,7 +465,7 @@ def main(args=None):
     from DSR_ROBOT2 import release_force, get_tcp, release_compliance_ctrl
 
     if get_tcp() != ROBOT_TCP:
-        print(f"엔드이펙터 - Gripper 오류 : {get_tcp()}")
+        print(f"엔드이펙터 - Gripper 오류: {get_tcp()} != {ROBOT_TCP}")
         node.destroy_node()
         rclpy.shutdown()
 
