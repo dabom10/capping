@@ -34,6 +34,7 @@ setup(
             'recover = robot.recover:main',
             'recovery = robot.recovery:main',
             'reboot_a = robot.reboot_a:main',
+            'reboot_a_v2 = robot.reboot_a_v2:main',
         ],
     },
 )
