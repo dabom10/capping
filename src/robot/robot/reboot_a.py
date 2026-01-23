@@ -214,6 +214,7 @@ class IntegratedSystem:
         movel(posx([target_go[0], target_go[1], target_go[2]+30, target_go[3], target_go[4], target_go[5]]), vel=VELX, acc=ACCX)
         movel(posx([target_go[0], target_go[1], target_go[2]-(idx*10), target_go[3], target_go[4], target_go[5]]), vel=[20,20], acc=ACCX_SLOW)
 
+
         # # 힘 제어 누르기
         # print("뚜껑 누르기")
         # self.release(); wait(0.3)
