@@ -18,11 +18,17 @@
 장비명 : M0609
 
 ### 프로젝트 구조
-/cobot/src/
-├── robot/          # 메인 로봇 제어 패키지
-├── capping/        # 캡핑 공정 패키지
-├── shaking/        # 쉐이킹 공정 패키지
-└── web_ui/         # 웹 UI 및 Firebase 연동 패키지
+```
+cobot/
+├── src/
+│ ├── robot/ # 메인 로봇 제어 (ROS2 Node)
+│ ├── capping/ # 자동 캡핑 공정 로직
+│ ├── shaking/ # 쉐이킹 공정 제어
+│ └── web_ui/ # UI + Firebase 연동
+├── launch/ # ROS2 launch 파일
+├── config/ # 설정 파일
+└── README.md
+```
 
 ### ROS2 패키지 의존성
 
