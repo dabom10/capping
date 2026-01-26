@@ -1,10 +1,10 @@
 # Cobot Project
 두산 로봇 기반 캡핑 및 쉐이킹 자동화 공정 시스템
 
-## 시스템 설계
+## 시스템 아키텍쳐
 !['시스템 아키텍쳐'](img/system.png)
 
-## 플로우차트
+## 플로우 차트
 ![플로우 차트](img/flow.png)
 
 ## 운영체제 환경
@@ -17,7 +17,7 @@
 ## 사용 장비 목록
 장비명 : M0609
 
-### 프로젝트 구조
+## 프로젝트 구조
 ```
 cobot/
 ├── src/
@@ -25,11 +25,10 @@ cobot/
 │ ├── capping/ # 자동 캡핑 공정 로직
 │ ├── shaking/ # 쉐이킹 공정 제어
 │ └── web_ui/ # UI + Firebase 연동
-├── launch/ # ROS2 launch 파일
-├── config/ # 설정 파일
 └── README.md
 ```
 
+## 의존성
 ### ROS2 패키지 의존성
 
 | 패키지 | 의존성 |
@@ -59,16 +58,11 @@ cobot/
 
 `time`, `threading`, `math`, `os`, `subprocess`, `glob`
 
-### 설치 방법
+## 설치 방법
 
 ```bash
-# ROS2 패키지
-sudo apt install ros-<distro>-rclpy ros-<distro>-std-msgs ros-<distro>-sensor-msgs
-
-# Python 패키지
-pip install firebase-admin pytest
-
-# 두산 로봇 드라이버는 src/doosan-robot2에 포함
+# firebase 패키지
+pip install firebase-admin
 ```
 
 ---
@@ -87,6 +81,7 @@ source install/setup.bash
 
 ```bash
 ros2 run cobot cobot reboot_a_v2
+ros2 launch web_ui web_ui_web_ui.launch.py -> cobot/src/web_ui/web_ui/web_ui.html 
 ```
 
 ---
